@@ -1,13 +1,12 @@
-# Telegram Image Converter Bot
+# Telegram AI Translator Bot
 
-Converts images to different formats using a Telegram bot
+Translates text using Meta's LLMs
 
 ## 🌟 Main Packages
 
 - Hono
 - Node-Telegram-Bot-API
-- Sharp
 
 ## 📜 License
 
-This project is licensed under the MIT License. See the [LICENSE](https://github.com/alwalxed/telegram-image-converter-bot/blob/main/LICENSE) file for details
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/alwalxed/telegram-ai-translator-bot/blob/main/LICENSE) file for details
