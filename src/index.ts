@@ -60,6 +60,8 @@ async function handleTextMessage(bot: TelegramBot, msg: Message) {
   if (userState.get(msg.chat.id)?.chosenLanguage) {
     if (msg.text!.length === 1) {
       send_message(bot, msg.chat.id, "Send a valid text");
+    } else if (msg.text!.length > 800) {
+      send_message(bot, msg.chat.id, "Text is too long");
     } else {
       await handleTranslation(bot, msg);
     }
