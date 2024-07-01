@@ -34,7 +34,7 @@ export const fetchTranslation = async (
     target_lang: targetLanguage.substring(0, 2).toLowerCase(),
   };
 
-  logger("info", "payload", "No user", {
+  logger("info", "payload", undefined, {
     payload,
     username,
     fullName,
@@ -56,7 +56,7 @@ export const fetchTranslation = async (
     });
 
     if (!aiResponse.ok) {
-      logger("error", "fetchTranslation", "No user", {
+      logger("error", "fetchTranslation", undefined, {
         aiResponse,
       });
       throw new Error(
@@ -71,7 +71,7 @@ export const fetchTranslation = async (
       !responseData.response ||
       !responseData.response.translated_text
     ) {
-      logger("error", "fetchTranslation", "No user", {});
+      logger("error", "fetchTranslation", undefined, {});
       throw new Error("Invalid response from translation service");
     }
 
@@ -81,7 +81,7 @@ export const fetchTranslation = async (
     });
     await bot.sendMessage(chatId, "New translation? /start");
   } catch (error) {
-    logger("error", "fetchTranslation", "No user", { error });
+    logger("error", "fetchTranslation", undefined, { error });
     await bot.editMessageText("Translation failed, /start to try again", {
       chat_id: chatId,
       message_id: translatingMessageId,

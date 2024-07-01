@@ -9,10 +9,10 @@ export async function retryWithExponentialBackoff(bot: TelegramBot) {
       await new Promise((resolve) => setTimeout(resolve, delay));
 
       await bot.startPolling();
-      logger("info", "retryWithExponentialBackoff", "No user", { delay });
+      logger("info", "retryWithExponentialBackoff", undefined, { delay });
       break;
     } catch (error) {
-      logger("error", "retryWithExponentialBackoff", "No user", { error });
+      logger("error", "retryWithExponentialBackoff", undefined, { error });
       delay *= 2;
     }
   }

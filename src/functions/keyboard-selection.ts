@@ -20,7 +20,7 @@ export const sendLanguageSelection = async (
     });
     return message;
   } catch (error) {
-    logger("error", "sendLanguageSelection", "No user", { error });
+    logger("error", "sendLanguageSelection", undefined, { error });
     throw error;
   }
 };
