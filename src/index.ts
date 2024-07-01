@@ -1,95 +1,99 @@
 import { serve } from "@hono/node-server";
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import { Hono } from "hono";
-import { _get_token } from "./utils/get-token";
-import { __log__ } from "./utils/log";
-import { startCommandHandler } from "./helpers/start-command";
-import { _save_last_update_id } from "./utils/last-updated";
-import { get_message_info } from "./utils/get-msg-info";
-import { LANGUAGES, port, userState } from "./consts";
-import { send_message } from "./helpers/message";
+import { logger } from "./functions/logger";
 import { AllowedLanguage } from "./types";
-import { handleTranslation } from "./helpers/translation";
+import { flatLanguages, PORT, TOKEN, userState } from "./constants";
+import { fetchTranslation } from "./functions/fetch-translation";
+import { retryWithExponentialBackoff } from "./functions/retry";
+import { sendLanguageSelection } from "./functions/keyboard-selection";
+import { extractSenderInfo } from "./functions/extract-sender-info";
 
 const app = new Hono();
-const bot = new TelegramBot(_get_token(), { polling: true, filepath: false });
+const bot = new TelegramBot(TOKEN, {
+  polling: true,
+  filepath: false,
+});
 
-// Handle incoming messages
 bot.on("message", async (msg: Message) => {
   try {
-    __log__("Received message", get_message_info(msg));
+    const { chatId, username, fullName, userId } = extractSenderInfo(msg);
+    const currentState = userState.get(chatId) || { step: "startCommand" };
+    logger("info", "new message", currentState, {
+      chatId,
+      username,
+      fullName,
+      userId,
+    });
 
     if (msg.text?.startsWith("/start")) {
-      await handleStartCommand(bot, msg);
-    } else if (isLanguageCommand(msg.text)) {
-      handleLanguageCommand(bot, msg);
-    } else if (msg.text) {
-      handleTextMessage(bot, msg);
+      userState.set(chatId, { step: "startCommand" });
+      await sendLanguageSelection(bot, chatId, "From?");
+      userState.set(chatId, {
+        ...currentState,
+        step: "sourceLanguageKeyboard",
+      });
+    } else if (
+      currentState.step === "sourceLanguageKeyboard" &&
+      flatLanguages.includes(msg.text as AllowedLanguage)
+    ) {
+      await sendLanguageSelection(bot, chatId, "To?");
+      userState.set(chatId, {
+        ...currentState,
+        step: "targetLanguageKeyboard",
+        sourceLanguage: msg.text,
+      });
+    } else if (
+      currentState.step === "targetLanguageKeyboard" &&
+      flatLanguages.includes(msg.text as AllowedLanguage)
+    ) {
+      await bot.sendMessage(chatId, "Send the text");
+      userState.set(chatId, {
+        ...currentState,
+        step: "textValidation",
+        targetLanguage: msg.text,
+      });
+    } else if (msg.text && currentState.step === "textValidation") {
+      const isValidLength = msg.text?.length >= 2 && msg.text?.length <= 800;
+
+      if (isValidLength) {
+        userState.set(chatId, {
+          ...currentState,
+          step: "fetchTranslation",
+          text: msg.text,
+        });
+        await fetchTranslation(bot, msg);
+      } else {
+        await bot.sendMessage(
+          chatId,
+          "Text must be between 2 and 800 characters, /start to retry"
+        );
+      }
     } else {
-      send_message(bot, msg.chat.id, "Bad request, please use /start");
+      userState.set(chatId, { step: "error" });
+      await bot.sendMessage(chatId, "Bad request, please use /start");
     }
-    _save_last_update_id(msg.message_id);
   } catch (error) {
-    handleErrorMessage(msg, error);
+    logger("error", "message", undefined, { error });
   }
 });
 
-// Check if message text is a language command
-function isLanguageCommand(text: string | undefined): boolean {
-  if (!text) return false;
-  const lowerCasedLangs = LANGUAGES.map((lang) => lang.toLowerCase());
-  return lowerCasedLangs.includes(text.toLowerCase());
-}
-
-// Handle /start command
-async function handleStartCommand(bot: TelegramBot, msg: Message) {
-  userState.set(msg.chat.id, {});
-  await startCommandHandler(bot, msg);
-}
-
-// Handle language command
-function handleLanguageCommand(bot: TelegramBot, msg: Message) {
-  userState.set(msg.chat.id, {
-    chosenLanguage: msg.text as AllowedLanguage,
-  });
-  send_message(bot, msg.chat.id, "Send the text");
-}
-
-// Handle text message
-async function handleTextMessage(bot: TelegramBot, msg: Message) {
-  if (userState.get(msg.chat.id)?.chosenLanguage) {
-    if (msg.text!.length === 1) {
-      send_message(bot, msg.chat.id, "Send a valid text");
-    } else if (msg.text!.length > 800) {
-      send_message(bot, msg.chat.id, "Text is too long");
-    } else {
-      await handleTranslation(bot, msg);
-    }
-  } else {
-    send_message(bot, msg.chat.id, "Choose language or /start");
+bot.on("polling_error", async (error) => {
+  logger("error", "polling_error", undefined, { error });
+  try {
+    await bot.stopPolling();
+    logger("info", "polling_error", undefined, { error });
+    await retryWithExponentialBackoff(bot);
+  } catch (err) {
+    logger("error", "polling_error", undefined, { error: err });
   }
-}
-
-// Handle errors
-function handleErrorMessage(
-  msg: Message | { chat: { id: number } },
-  error: unknown
-) {
-  console.error("Error handling message:", error);
-  __log__("Error handling message", { chat_id: msg.chat.id, error });
-}
-
-// Handle polling errors
-bot.on("polling_error", (error) => {
-  handleErrorMessage({ chat: { id: 0 } }, error); // Replace with actual chat ID
 });
 
-// Handle webhook errors
 bot.on("webhook_error", (error) => {
-  handleErrorMessage({ chat: { id: 0 } }, error); // Replace with actual chat ID
+  logger("error", "webhook_error", undefined, { error });
 });
 
-// Start serving the bot
-serve({ fetch: app.fetch, port: port });
-console.log(`Server is running on port ${port}`);
-__log__("Server started", { port });
+serve({ fetch: app.fetch, port: PORT });
+
+console.log(`Server is running on port ${PORT}`);
+logger("info", `Server is running on port ${PORT}`, undefined, {});

@@ -15,7 +15,7 @@ server.log
 last_update_id.txt
 # env
 .env
-.env.*
+.env.local
 .env.production
 
 # logs
