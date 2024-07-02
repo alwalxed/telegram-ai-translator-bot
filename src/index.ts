@@ -5,7 +5,6 @@ import { logger } from "./functions/logger";
 import { AllowedLanguage } from "./types";
 import { flatLanguages, PORT, TOKEN, userState } from "./constants";
 import { fetchTranslation } from "./functions/fetch-translation";
-import { retryWithExponentialBackoff } from "./functions/retry";
 import { sendLanguageSelection } from "./functions/keyboard-selection";
 import { extractSenderInfo } from "./functions/extract-sender-info";
 
@@ -78,15 +77,8 @@ bot.on("message", async (msg: Message) => {
   }
 });
 
-bot.on("polling_error", async (error) => {
+bot.on("polling_error", (error) => {
   logger("error", "polling_error", undefined, { error });
-  try {
-    await bot.stopPolling();
-    logger("info", "polling_error", undefined, { error });
-    await retryWithExponentialBackoff(bot);
-  } catch (err) {
-    logger("error", "polling_error", undefined, { error: err });
-  }
 });
 
 bot.on("webhook_error", (error) => {
